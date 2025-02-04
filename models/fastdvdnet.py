@@ -15,8 +15,10 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+
 class CvBlock(nn.Module):
     '''(Conv2d => BN => ReLU) x 2'''
+
     def __init__(self, in_ch, out_ch, mf2f=False):
         super(CvBlock, self).__init__()
         self.convblock = nn.Sequential(
@@ -31,17 +33,19 @@ class CvBlock(nn.Module):
     def forward(self, x):
         return self.convblock(x)
 
+
 class InputCvBlock(nn.Module):
     '''(Conv with num_in_frames groups => BN => ReLU) + (Conv => BN => ReLU)'''
+
     def __init__(self, num_in_frames, out_ch, mf2f=False):
         super(InputCvBlock, self).__init__()
         self.interm_ch = 30
         self.convblock = nn.Sequential(
-            nn.Conv2d(num_in_frames*(3+1), num_in_frames*self.interm_ch, \
+            nn.Conv2d(num_in_frames * (3 + 1), num_in_frames * self.interm_ch, \
                       kernel_size=3, padding=1, groups=num_in_frames, bias=mf2f),
-            nn.BatchNorm2d(num_in_frames*self.interm_ch),
+            nn.BatchNorm2d(num_in_frames * self.interm_ch),
             nn.ReLU(inplace=True),
-            nn.Conv2d(num_in_frames*self.interm_ch, out_ch, kernel_size=3, padding=1, bias=mf2f),
+            nn.Conv2d(num_in_frames * self.interm_ch, out_ch, kernel_size=3, padding=1, bias=mf2f),
             nn.BatchNorm2d(out_ch),
             nn.ReLU(inplace=True)
         )
@@ -49,8 +53,10 @@ class InputCvBlock(nn.Module):
     def forward(self, x):
         return self.convblock(x)
 
+
 class DownBlock(nn.Module):
     '''Downscale + (Conv2d => BN => ReLU)*2'''
+
     def __init__(self, in_ch, out_ch, mf2f=False):
         super(DownBlock, self).__init__()
         self.convblock = nn.Sequential(
@@ -63,21 +69,25 @@ class DownBlock(nn.Module):
     def forward(self, x):
         return self.convblock(x)
 
+
 class UpBlock(nn.Module):
     '''(Conv2d => BN => ReLU)*2 + Upscale'''
+
     def __init__(self, in_ch, out_ch, mf2f=False):
         super(UpBlock, self).__init__()
         self.convblock = nn.Sequential(
             CvBlock(in_ch, in_ch, mf2f=mf2f),
-            nn.Conv2d(in_ch, out_ch*4, kernel_size=3, padding=1, bias=mf2f),
+            nn.Conv2d(in_ch, out_ch * 4, kernel_size=3, padding=1, bias=mf2f),
             nn.PixelShuffle(2)
         )
 
     def forward(self, x):
         return self.convblock(x)
 
+
 class OutputCvBlock(nn.Module):
     '''Conv2d => BN => ReLU => Conv2d'''
+
     def __init__(self, in_ch, out_ch, mf2f=False):
         super(OutputCvBlock, self).__init__()
         self.convblock = nn.Sequential(
@@ -89,6 +99,7 @@ class OutputCvBlock(nn.Module):
 
     def forward(self, x):
         return self.convblock(x)
+
 
 class DenBlock(nn.Module):
     """ Definition of the denosing block of FastDVDnet.
@@ -135,14 +146,15 @@ class DenBlock(nn.Module):
         x2 = self.downc1(x1)
         # Upsampling
         x2 = self.upc2(x2)
-        x1 = self.upc1(x1+x2)
+        x1 = self.upc1(x1 + x2)
         # Estimation
-        x = self.outc(x0+x1)
+        x = self.outc(x0 + x1)
 
         # Residual
         x = in1 - x
 
         return x
+
 
 class FastDVDnet(nn.Module):
     """ Definition of the FastDVDnet model.
@@ -176,29 +188,29 @@ class FastDVDnet(nn.Module):
         '''
         # hack
         N, C, H, W = x.shape
-        if(H%4 != 0):
-            x = F.pad(x, [0, 0, 4-(H%4), 0], mode = 'reflect')
-            noise_map = F.pad(noise_map, [0, 0, 4-(H%4), 0], mode = 'reflect')
-        if(W%4 != 0):
-            x = F.pad(x, [4-(W%4), 0, 0, 0], mode = 'reflect')
-            noise_map = F.pad(noise_map, [4-(W%4), 0, 0, 0], mode = 'reflect')
-        
+        if (H % 4 != 0):
+            x = F.pad(x, [0, 0, 4 - (H % 4), 0], mode='reflect')
+            noise_map = F.pad(noise_map, [0, 0, 4 - (H % 4), 0], mode='reflect')
+        if (W % 4 != 0):
+            x = F.pad(x, [4 - (W % 4), 0, 0, 0], mode='reflect')
+            noise_map = F.pad(noise_map, [4 - (W % 4), 0, 0, 0], mode='reflect')
+
         # Unpack inputs
-        (x0, x1, x2, x3, x4) = tuple(x[:, 3*m:3*m+3, :, :] for m in range(self.num_input_frames))
+        (x0, x1, x2, x3, x4) = tuple(x[:, 3 * m:3 * m + 3, :, :] for m in range(self.num_input_frames))
 
         # First stage
         self.f1 = x20 = self.temp1(x0, x1, x2, noise_map)
         self.f2 = x21 = self.temp1(x1, x2, x3, noise_map)
         self.f3 = x22 = self.temp1(x2, x3, x4, noise_map)
 
-        #Second stage
+        # Second stage
         x = self.temp2(x20, x21, x22, noise_map)
-        
+
         # unhack
         N1, C1, H1, W1 = x.shape
-        if(H%4 != 0):
-            x = x[:, :, (4-(H%4)):H1, 0:W1]
-        if(W%4 != 0):
-            x = x[:, :, 0:H, (4-(W%4)):W1]
+        if H % 4 != 0:
+            x = x[:, :, (4 - (H % 4)):H1, 0:W1]
+        if W % 4 != 0:
+            x = x[:, :, 0:H, (4 - (W % 4)):W1]
 
         return x

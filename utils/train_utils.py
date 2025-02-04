@@ -12,8 +12,10 @@ from datetime import datetime
 from torch.serialization import default_restore_location
 
 import sys
+
 sys.path.append('../')
 import models
+
 
 def add_logging_arguments(parser):
     parser.add_argument("--seed", default=0, type=int, help="random number generator seed")
@@ -45,11 +47,13 @@ def setup_experiment(args):
         return
 
     args.experiment = args.experiment or f"{args.model.replace('_', '-')}"
-    args.experiment = "-".join([args.experiment, 'BF' if (not args.bias) else 'B', str(args.min_noise), str(args.max_noise)])
+    args.experiment = "-".join(
+        [args.experiment, 'BF' if (not args.bias) else 'B', str(args.min_noise), str(args.max_noise)])
     if not args.resume_training:
         args.experiment = "-".join([args.experiment, datetime.now().strftime("%b-%d-%H:%M:%S")])
 
-    args.experiment_dir = os.path.join(args.output_dir, args.model, (f"drafts/" if args.draft else "") + args.experiment)
+    args.experiment_dir = os.path.join(args.output_dir, args.model,
+                                       (f"drafts/" if args.draft else "") + args.experiment)
     os.makedirs(args.experiment_dir, exist_ok=True)
 
     if not args.no_save:
@@ -67,7 +71,8 @@ def init_logging(args):
     if not args.no_log and args.log_file is not None:
         mode = "a" if os.path.isfile(args.resume_training) else "w"
         handlers.append(logging.FileHandler(args.log_file, mode=mode))
-    logging.basicConfig(handlers=handlers, format="[%(asctime)s] %(message)s", datefmt="%Y-%m-%d %H:%M:%S", level=logging.INFO)
+    logging.basicConfig(handlers=handlers, format="[%(asctime)s] %(message)s", datefmt="%Y-%m-%d %H:%M:%S",
+                        level=logging.INFO)
     logging.info("COMMAND: %s" % " ".join(sys.argv))
     logging.info("Arguments: {}".format(vars(args)))
 
@@ -137,11 +142,12 @@ def load_checkpoint(args, model=None, optimizer=None, scheduler=None):
 
         logging.info("Loaded checkpoint {}".format(args.restore_file))
         return state_dict
-    
+
+
 # definition for loading model from a pretrained network file
-def load_model(PATH, Fast=False, parallel=False, pretrained=True, old=True, load_opt=False, mf2f=False):
-    if not Fast:
-        state_dict = torch.load(PATH, map_location="cpu")
+def load_model(path, fast=False, parallel=False, pretrained=True, old=True, load_opt=False, mf2f=False):
+    if not fast:
+        state_dict = torch.load(path, map_location="cpu", weights_only=False)
         args = argparse.Namespace(**{**vars(state_dict["args"])})
         # ignore this
         if old:
@@ -151,22 +157,22 @@ def load_model(PATH, Fast=False, parallel=False, pretrained=True, old=True, load
         optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
     else:
         model = models.FastDVDnet(mf2f=mf2f)
-    
+
     if load_opt:
         for o, state in zip([optimizer], state_dict["optimizer"]):
             o.load_state_dict(state)
-    
+
     if pretrained:
-        if Fast:
-            state_dict = torch.load(PATH)
+        if fast:
+            state_dict = torch.load(path, map_location=torch.device('cpu'), weights_only=False)
         else:
-            state_dict = torch.load(PATH)["model"][0]
+            state_dict = torch.load(path, map_location=torch.device('cpu'), weights_only=False)["model"][0]
         own_state = model.state_dict()
-        
+
         for name, param in state_dict.items():
             if parallel:
                 name = name[7:]
-            if Fast and not mf2f:
+            if fast and not mf2f:
                 name = name.split('.', 1)[1]
             if name not in own_state:
                 print("not matching: ", name)
@@ -175,8 +181,8 @@ def load_model(PATH, Fast=False, parallel=False, pretrained=True, old=True, load
                 # backwards compatibility for serialized parameters
                 param = param.data
             own_state[name].copy_(param)
-        
-    if not Fast:
+
+    if not fast:
         return model, optimizer, args
     else:
         return model
