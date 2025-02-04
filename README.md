@@ -12,6 +12,16 @@ Paper: [arXiv:2011.15045](https://arxiv.org/abs/2011.15045)
 
 Website: [https://sreyas-mohan.github.io/udvd/](https://sreyas-mohan.github.io/udvd/)
 
+
+## Requirements
+
+Tested with `python 3.11`.
+
+```shell
+pip install -r requirements.txt
+```
+
+
 ## Pre-trained Models
 
 The `pretrained` folder contains the saved models, details about each are listed below.

@@ -8,6 +8,7 @@ Functions to estimate the flow between two images and compensate it.
 import numpy as np
 import cv2
 
+
 # Parameters of the motion estimation algorithms
 def warp_flow(img, flow):
     '''
@@ -21,6 +22,7 @@ def warp_flow(img, flow):
     flow[:, :, 1] += np.arange(hf)[:, np.newaxis]
     res = cv2.remap(img, flow, None, cv2.INTER_LINEAR)
     return res
+
 
 def estimate_invflow(img0, img1, me_algo):
     '''
@@ -45,6 +47,7 @@ def estimate_invflow(img0, img1, me_algo):
 
     return flow
 
+
 def align_frames(img_to_align, img_source, mc_alg='DeepFlow'):
     '''
         Applies to img_to_align a transformation which converts it into img_source.
@@ -58,10 +61,10 @@ def align_frames(img_to_align, img_source, mc_alg='DeepFlow'):
 
     # make sure images are uint8 in the [0, 255] range
     if img_source.max() <= 1.0:
-        img_source = (img_source*255).clip(0, 255)
+        img_source = (img_source * 255).clip(0, 255)
     img_source = img_source.astype(np.uint8)
     if img_to_align.max() <= 1.0:
-        img_to_align = (img_to_align*255).clip(0, 255)
+        img_to_align = (img_to_align * 255).clip(0, 255)
     img_to_align = img_to_align.astype(np.uint8)
 
     img0 = img_to_align[:, :, 0]
