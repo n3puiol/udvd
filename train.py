@@ -9,7 +9,7 @@ import torch.nn.functional as F
 from torch.utils.tensorboard import SummaryWriter
 
 import data, models, utils
-
+debug = True
 
 def main(args):
     device = torch.device('cuda:0') if torch.cuda.is_available() else torch.device('cpu')
@@ -51,27 +51,36 @@ def main(args):
         for meter in mean_meters.values():
             meter.reset()
 
+        if debug: print("data enumeration")
         for batch_id, inputs in enumerate(train_bar):
             model.train()
-
             global_step += 1
             inputs = inputs.to(device)
-            
-            noise = utils.get_noise(inputs, dist = args.noise_dist, mode = args.noise_mode,
-                                            min_noise = args.min_noise, max_noise = args.max_noise,
-                                            noise_std = args.noise_std)
 
-            noisy_inputs = noise + inputs;
+            noise = utils.get_noise(inputs, dist=args.noise_dist, mode=args.noise_mode,
+                                    min_noise=args.min_noise, max_noise=args.max_noise,
+                                    noise_std=args.noise_std)
+            noisy_inputs = noise + inputs
 
-            outputs, est_sigma = model(noisy_inputs)
+            if debug: print("running model")
+            outputs, est_sigma, reconstructed_x, original_x = model(noisy_inputs)
 
             noisy_frame = noisy_inputs[:, (mid*cpf):((mid+1)*cpf), :, :]
 
+            if debug: print("denoise loss")
+            # Denoising loss
             if args.blind_noise:
-                loss = utils.loss_function(outputs, noisy_frame, mode=args.loss, sigma=est_sigma, device=device)
+                denoising_loss = utils.loss_function(outputs, noisy_frame, mode=args.loss, sigma=est_sigma, device=device)
             else:
-                loss = utils.loss_function(outputs, noisy_frame, mode=args.loss, sigma=args.noise_std/255, device=device)
+                denoising_loss = utils.loss_function(outputs, noisy_frame, mode=args.loss, sigma=args.noise_std/255, device=device)
 
+            if debug: print("vae loss")
+            # VAE reconstruction loss
+            vae_loss_weight = 0.01
+            vae_loss = F.mse_loss(reconstructed_x, original_x)
+            loss = denoising_loss + vae_loss_weight * vae_loss # total loss
+
+            if debug: print("backpropagation")
             model.zero_grad()
             loss.backward()
             optimizer.step()
@@ -79,10 +88,11 @@ def main(args):
             if args.loss == "loglike":
                 with torch.no_grad():
                     if args.blind_noise:
-                            outputs, mean_image = utils.post_process(outputs, noisy_frame, model=args.model, sigma=est_sigma, device=device)
-                        else:
-                            outputs, mean_image = utils.post_process(outputs, noisy_frame, model=args.model, sigma=args.noise_std/255, device=device)
+                        outputs, mean_image = utils.post_process(outputs, noisy_frame, model=args.model, sigma=est_sigma, device=device)
+                    else:
+                        outputs, mean_image = utils.post_process(outputs, noisy_frame, model=args.model, sigma=args.noise_std/255, device=device)
 
+            if debug: print("logging metrics")
             train_psnr = utils.psnr(inputs[:, (mid*cpf):((mid+1)*cpf), :, :], outputs)
             train_ssim = utils.ssim(inputs[:, (mid*cpf):((mid+1)*cpf), :, :], outputs)
             train_meters["train_loss"].update(loss.item())
@@ -210,6 +220,7 @@ def main(args):
                 writer.add_scalar("ssim/valid", valid_meters['valid_ssim'].avg, global_step)
                 sys.stdout.flush()
 
+            if debug: print("saving checkpoint")
             logging.info("EVAL:"+train_bar.print(dict(**valid_meters, **mean_meters, lr=optimizer.param_groups[0]["lr"])))
             utils.save_checkpoint(args, global_step, model, optimizer, score=valid_meters["valid_psnr"].avg, mode="max")
 

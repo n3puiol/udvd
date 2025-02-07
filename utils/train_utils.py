@@ -50,7 +50,7 @@ def setup_experiment(args):
     args.experiment = "-".join(
         [args.experiment, 'BF' if (not args.bias) else 'B', str(args.min_noise), str(args.max_noise)])
     if not args.resume_training:
-        args.experiment = "-".join([args.experiment, datetime.now().strftime("%b-%d-%H:%M:%S")])
+        args.experiment = "-".join([args.experiment, datetime.now().strftime("%b-%d-%H+%M+%S")])
 
     args.experiment_dir = os.path.join(args.output_dir, args.model,
                                        (f"drafts/" if args.draft else "") + args.experiment)
@@ -71,7 +71,7 @@ def init_logging(args):
     if not args.no_log and args.log_file is not None:
         mode = "a" if os.path.isfile(args.resume_training) else "w"
         handlers.append(logging.FileHandler(args.log_file, mode=mode))
-    logging.basicConfig(handlers=handlers, format="[%(asctime)s] %(message)s", datefmt="%Y-%m-%d %H:%M:%S",
+    logging.basicConfig(handlers=handlers, format="[%(asctime)s] %(message)s", datefmt="%Y-%m-%d %H%M:%S",
                         level=logging.INFO)
     logging.info("COMMAND: %s" % " ".join(sys.argv))
     logging.info("Arguments: {}".format(vars(args)))
