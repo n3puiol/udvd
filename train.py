@@ -8,6 +8,8 @@ import torch.nn.functional as F
 
 from torch.utils.tensorboard import SummaryWriter
 
+# python train.py --model blind-video-net-4 --data-path datasets/DAVIS --dataset DAVIS --batch-size 32 --lr 1e-4 --num-epochs 40
+
 import data, models, utils
 debug = True
 
@@ -18,7 +20,7 @@ def main(args):
 
     # Build data loaders, a model and an optimizer
     model = models.build_model(args).to(device)
-    cpf = model.c # channels per frame
+    cpf = model.c_nolatent # channels per frame
     mid = args.n_frames // 2
     model = nn.DataParallel(model)
     print(model)
@@ -74,11 +76,12 @@ def main(args):
             else:
                 denoising_loss = utils.loss_function(outputs, noisy_frame, mode=args.loss, sigma=args.noise_std/255, device=device)
 
-            if debug: print("vae loss")
             # VAE reconstruction loss
-            vae_loss_weight = 0.01
-            vae_loss = F.mse_loss(reconstructed_x, original_x)
-            loss = denoising_loss + vae_loss_weight * vae_loss # total loss
+            # if debug: print("vae loss")
+            # vae_loss_weight = 0.01
+            # vae_loss = F.mse_loss(x, original_x)
+            # loss = denoising_loss + vae_loss_weight * vae_loss # total loss
+            loss = denoising_loss
 
             if debug: print("backpropagation")
             model.zero_grad()
@@ -93,6 +96,8 @@ def main(args):
                         outputs, mean_image = utils.post_process(outputs, noisy_frame, model=args.model, sigma=args.noise_std/255, device=device)
 
             if debug: print("logging metrics")
+            print("inputs shape: ", inputs.shape)
+            print("outputs shape: ", outputs.shape)
             train_psnr = utils.psnr(inputs[:, (mid*cpf):((mid+1)*cpf), :, :], outputs)
             train_ssim = utils.ssim(inputs[:, (mid*cpf):((mid+1)*cpf), :, :], outputs)
             train_meters["train_loss"].update(loss.item())

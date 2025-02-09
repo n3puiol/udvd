@@ -282,30 +282,32 @@ class BlindVideoNetD1(nn.Module):
 # THE UDVD MODEL to adapt
 @register_model("blind-video-net-4")
 class BlindVideoNet(nn.Module):
-    def __init__(self, channels_per_frame=3, out_channels=9, bias=False, blind=True, sigma_known=True):
+    def __init__(self, channels_per_frame=4, out_channels=9, bias=False, blind=True, sigma_known=True):
         super().__init__()
+        self.c_nolatent = 3
         self.c = channels_per_frame
         self.out_channels = out_channels
         self.blind = blind
         self.sigma_known = sigma_known
         self.rotate = rotate()
-        self.denoiser_1 = Blind_UNet(n_channels=3*channels_per_frame, n_output=32, bias=bias, blind=blind)
-        self.denoiser_2 = Blind_UNet(n_channels=96, n_output=96, bias=bias, blind=blind)
+        print("channels pf: ", self.c)
+        self.denoiser_1 = Blind_UNet(n_channels=3*channels_per_frame, n_output=4, bias=bias, blind=blind)
+        self.denoiser_2 = Blind_UNet(n_channels=12, n_output=12, bias=bias, blind=blind)
         if not sigma_known:
             self.sigma_net = Blind_UNet(n_channels=5*channels_per_frame, n_output=1, bias=False, blind=False)
         if blind:
             self.shift = shift()
         self.unrotate = unrotate()
-        self.nin_A = nn.Conv2d(384, 384, 1, bias=bias)
-        self.nin_B = nn.Conv2d(384, 96, 1, bias=bias)
-        self.nin_C = nn.Conv2d(96, out_channels, 1, bias=bias)
+        self.nin_A = nn.Conv2d(36, 36, 1, bias=bias)
+        self.nin_B = nn.Conv2d(36, 9, 1, bias=bias)
+        self.nin_C = nn.Conv2d(9, out_channels, 1, bias=bias)
         self.vae = AutoencoderKL.from_pretrained("stabilityai/sd-vae-ft-mse")
         self.vae.to("cuda")
         self.vae.eval()
 
     @staticmethod
     def add_args(parser):
-        parser.add_argument("--channels", type=int, default=3, help="number of channels per frame")
+        parser.add_argument("--channels", type=int, default=4, help="number of channels per frame")
         parser.add_argument("--out-channels", type=int, default=9, help="number of output channels")
         parser.add_argument("--bias", action='store_true', help="use residual bias")
         parser.add_argument("--normal", action='store_true', help="not a blind network")
@@ -318,6 +320,7 @@ class BlindVideoNet(nn.Module):
     def prepare_latents(self, x):
         x = x.to("cuda")
         print("frame splitting")
+        print("x shape: ", x.shape)
         # x is assumed to be of shape [B, 9, H, W] where 9 = 3 frames * 3 channels per frame.
         # Split x into three frames along the channel dimension.
         print("f1")
@@ -352,19 +355,33 @@ class BlindVideoNet(nn.Module):
 
     
     def decode_latents(self, latents):
+        latents = latents.to("cuda")
         print("latent decoding")
+        print("|latent shape: ", latents.shape)
         # Assume latents has shape [B, 3 * latent_channels, H_lat, W_lat]
-        channels_per_frame = latents.shape[1] // 3
+        channels_per_frame = self.c
         
         # Split the concatenated latent representation into 3 latent frames.
-        latent_frames = [latents[:, i * channels_per_frame:(i + 1) * channels_per_frame, :, :]
-                        for i in range(3)]
+        print("|splitting frames")
+        print("||splitting frame 1")
+        lf1 = latents[:, self.c*0:self.c*1, :, :]
+        print("||splitting frame 2")
+        lf2 = latents[:, self.c*1:self.c*2, :, :]
+        print("||splitting frame 3")
+        lf3 = latents[:, self.c*2:self.c*3, :, :]
         
         # Decode each latent frame separately.
-        decoded_frames = [self.vae.decode(latent_frame).sample for latent_frame in latent_frames]
-        
+        print("|decoding frames")
+        with torch.no_grad():
+            print("||decoding frame 1")
+            f1 = self.vae.decode(lf1).sample
+            print("||decoding frame 2")
+            f2 = self.vae.decode(lf2).sample
+            print("||decoding frame 3")
+            f3 = self.vae.decode(lf3).sample
+        print("|decoded shape f1: ", f1.shape)
         # Concatenate the decoded frames along the channel dimension to produce an output with 9 channels.
-        denoised_x = torch.cat(decoded_frames, dim=1)
+        denoised_x = torch.cat([f1, f2, f3], dim=1)
         print("end decoding")
         return denoised_x
 
@@ -388,9 +405,9 @@ class BlindVideoNet(nn.Module):
             diff = W - H
             x = F.pad(x, [0, 0, diff // 2, diff - diff // 2], mode = 'reflect')
 
-        i1 = self.rotate(x[:, 0:(3*self.c), :, :])
-        i2 = self.rotate(x[:, self.c:(4*self.c), :, :])
-        i3 = self.rotate(x[:, (2*self.c):(5*self.c), :, :])
+        i1 = self.rotate(x[:, 0:(3*self.c_nolatent), :, :])
+        i2 = self.rotate(x[:, self.c_nolatent:(4*self.c_nolatent), :, :])
+        i3 = self.rotate(x[:, (2*self.c_nolatent):(5*self.c_nolatent), :, :])
         
         if debug: print("to latent space")
         # image to latent space
@@ -419,10 +436,15 @@ class BlindVideoNet(nn.Module):
         if debug: print("post process, unrotate")
         if self.blind:
             reconstructed_x = self.shift(reconstructed_x)
+        if debug: print("|unrotate")
         x = self.unrotate(reconstructed_x)
+        if debug: print("|nin_A")
         x = F.leaky_relu_(self.nin_A(x), negative_slope=0.1)
+        if debug: print("|nin_B")
         x = F.leaky_relu_(self.nin_B(x), negative_slope=0.1)
+        if debug: print("|nin_C")
         x = self.nin_C(x)
+        if debug: print("before unsquare x shape: ", x.shape)
 
         if debug: print("remove padding")
         # Unsquare
@@ -432,5 +454,5 @@ class BlindVideoNet(nn.Module):
         elif W > H:
             diff = W - H
             x = x[:, :, (diff // 2):(diff // 2 + H), 0:W]
-
+        if debug: print("end x shape: ", x.shape)
         return x, sigma, reconstructed_x, torch.cat((i1, i2, i3), dim=1)
