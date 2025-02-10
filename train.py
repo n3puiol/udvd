@@ -11,7 +11,6 @@ from torch.utils.tensorboard import SummaryWriter
 # python train.py --model blind-video-net-4 --data-path datasets/DAVIS --dataset DAVIS --batch-size 32 --lr 1e-4 --num-epochs 40
 
 import data, models, utils
-debug = True
 
 def main(args):
     device = torch.device('cuda:0') if torch.cuda.is_available() else torch.device('cpu')
@@ -53,7 +52,6 @@ def main(args):
         for meter in mean_meters.values():
             meter.reset()
 
-        if debug: print("data enumeration")
         for batch_id, inputs in enumerate(train_bar):
             model.train()
             global_step += 1
@@ -64,12 +62,10 @@ def main(args):
                                     noise_std=args.noise_std)
             noisy_inputs = noise + inputs
 
-            if debug: print("running model")
             outputs, est_sigma, reconstructed_x, original_x = model(noisy_inputs)
 
             noisy_frame = noisy_inputs[:, (mid*cpf):((mid+1)*cpf), :, :]
 
-            if debug: print("denoise loss")
             # Denoising loss
             if args.blind_noise:
                 denoising_loss = utils.loss_function(outputs, noisy_frame, mode=args.loss, sigma=est_sigma, device=device)
@@ -83,7 +79,6 @@ def main(args):
             # loss = denoising_loss + vae_loss_weight * vae_loss # total loss
             loss = denoising_loss
 
-            if debug: print("backpropagation")
             model.zero_grad()
             loss.backward()
             optimizer.step()
@@ -95,9 +90,6 @@ def main(args):
                     else:
                         outputs, mean_image = utils.post_process(outputs, noisy_frame, model=args.model, sigma=args.noise_std/255, device=device)
 
-            if debug: print("logging metrics")
-            print("inputs shape: ", inputs.shape)
-            print("outputs shape: ", outputs.shape)
             train_psnr = utils.psnr(inputs[:, (mid*cpf):((mid+1)*cpf), :, :], outputs)
             train_ssim = utils.ssim(inputs[:, (mid*cpf):((mid+1)*cpf), :, :], outputs)
             train_meters["train_loss"].update(loss.item())
@@ -225,7 +217,6 @@ def main(args):
                 writer.add_scalar("ssim/valid", valid_meters['valid_ssim'].avg, global_step)
                 sys.stdout.flush()
 
-            if debug: print("saving checkpoint")
             logging.info("EVAL:"+train_bar.print(dict(**valid_meters, **mean_meters, lr=optimizer.param_groups[0]["lr"])))
             utils.save_checkpoint(args, global_step, model, optimizer, score=valid_meters["valid_psnr"].avg, mode="max")
 
