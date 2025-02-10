@@ -50,7 +50,7 @@ def setup_experiment(args):
     args.experiment = "-".join(
         [args.experiment, 'BF' if (not args.bias) else 'B', str(args.min_noise), str(args.max_noise)])
     if not args.resume_training:
-        args.experiment = "-".join([args.experiment, datetime.now().strftime("%b-%d-%H:%M:%S")])
+        args.experiment = "-".join([args.experiment, datetime.now().strftime("%b-%d-%H+%M+%S")])
 
     args.experiment_dir = os.path.join(args.output_dir, args.model,
                                        (f"drafts/" if args.draft else "") + args.experiment)

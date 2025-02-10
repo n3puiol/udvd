@@ -79,10 +79,11 @@ def main(args):
             if args.loss == "loglike":
                 with torch.no_grad():
                     if args.blind_noise:
-                            outputs, mean_image = utils.post_process(outputs, noisy_frame, model=args.model, sigma=est_sigma, device=device)
-                        else:
-                            outputs, mean_image = utils.post_process(outputs, noisy_frame, model=args.model, sigma=args.noise_std/255, device=device)
-
+                        outputs, mean_image = utils.post_process(outputs, noisy_frame, model=args.model, sigma=est_sigma, device=device)
+                    else:
+                        outputs, mean_image = utils.post_process(outputs, noisy_frame, model=args.model, sigma=args.noise_std/255, device=device)
+            print("inputs shp: ", inputs.shape)
+            print("outputs shp: ", outputs.shape)
             train_psnr = utils.psnr(inputs[:, (mid*cpf):((mid+1)*cpf), :, :], outputs)
             train_ssim = utils.ssim(inputs[:, (mid*cpf):((mid+1)*cpf), :, :], outputs)
             train_meters["train_loss"].update(loss.item())
