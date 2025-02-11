@@ -1,5 +1,3 @@
-# imports
-
 import os
 import os.path
 from tqdm import tqdm
@@ -9,10 +7,10 @@ import seaborn as sns
 import torch
 import torchvision.transforms as transforms
 import sys
+import data
+import utils
 
 sys.path.append('../')
-import data, utils
-
 sns.set_theme()
 
 
@@ -28,7 +26,7 @@ class MotionEstimation:
         self.transform = transforms.Compose([transforms.ToPILImage()])
         self.to_gray = transforms.Compose([transforms.ToPILImage(), transforms.Grayscale(num_output_channels=1)])
 
-        self.patch_size = 128
+        self.patch_size = 256
         self.stride = 64
         self.is_image = False
         self.n_frames = 5
@@ -92,13 +90,13 @@ class MotionEstimation:
                                                                 max_noise=self.max_noise,
                                                                 sample=True)
 
-        sample = self.test_loader.dataset[num][0].unsqueeze(0)[:, :, y:y + h, x:x + w].to(self.device)
+        sample = self.test_loader.dataset[num][0].unsqueeze(0)[:, :, self.y:self.y + self.h, self.x:self.x + self.w].to(
+            self.device)
         return sample
 
-    @staticmethod
-    def get_fixed_noise(sample, span=1):
+    def get_fixed_noise(self, sample, span=1):
         fixed_noises = []
-        for i in range(span + 5):
+        for i in range(span + self.n_frames):
             fixed_noises.append(utils.get_noise(sample[:, 0:3, :, :], dist="G", mode='S', noise_std=255))
         return fixed_noises
 
@@ -122,7 +120,8 @@ class MotionEstimation:
                 sample = self.load_sample(num=self.num + i)
                 clean_image = sample[:, (self.mid * self.cpf):((self.mid + 1) * self.cpf), :, :]
                 if not self.is_real:
-                    noise = (self.noise_std / 255.0) * torch.cat(self.get_fixed_noise(sample, span)[i:i + 5], 1)
+                    noise = (self.noise_std / 255.0) * torch.cat(
+                        self.get_fixed_noise(sample, span)[i:i + self.n_frames], 1)
                     noisy_inputs = noise + sample
                     noisy_frame = noisy_inputs[:, (self.mid * self.cpf):((self.mid + 1) * self.cpf), :, :]
                 else:
@@ -139,10 +138,8 @@ class MotionEstimation:
                     if not self.is_real:
                         output, mean_image = utils.post_process(output, noisy_frame, model="blind-video-net",
                                                                 sigma=self.noise_std / 255, device=self.device)
-                        psnr = utils.psnr(clean_image, output)
                 else:
                     output = self.model(noisy_inputs, noise_map)
-                    psnr = utils.psnr(clean_image, output)
 
                 loss = 100 * output[:, :, q, p].mean()
 
@@ -276,14 +273,14 @@ class MotionEstimation:
         plt.show()
 
 
-# ps = original_ps[0:36]
-#         qs = original_qs[0:36]
-
 def main():
     motion_estimation = MotionEstimation()
-    sample = motion_estimation.load_sample()
-    grad_mapss, pss, qss = motion_estimation.compute_jacobian_filters(span=1, load_cache=True,
-                                                                      cache_path="jacobian_filters.pt")
+    sample = motion_estimation.load_sample(video="01", dataset="KITTI", x=500, y=75, num=50, h=256, w=256)
+    # grad_mapss, pss, qss = motion_estimation.compute_jacobian_filters(span=1, load_cache=True,
+    #                                                                   cache_path="jacobian_filters.pt")
+    grad_mapss, pss, qss = motion_estimation.compute_jacobian_filters(span=1, cache_results=True,
+                                                                      cache_path="seq1_jacobian_filters.pt")
+    # grad_mapss, pss, qss = torch.load("seq1_jacobian_filters.pt", weights_only=False)
     ps = motion_estimation.ps[0:36]
     qs = motion_estimation.qs[0:36]
     fpss, fqss, npss, nqss = motion_estimation.compute_motion_compensation(sample, ps, qs, span=1)
