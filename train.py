@@ -8,6 +8,7 @@ import torch.nn.functional as F
 
 from torch.utils.tensorboard import SummaryWriter
 
+import time
 # python train.py --model blind-video-net-4 --data-path datasets/DAVIS --dataset DAVIS --batch-size 32 --lr 1e-4 --num-epochs 40
 
 import data, models, utils
@@ -53,6 +54,7 @@ def main(args):
             meter.reset()
 
         for batch_id, inputs in enumerate(train_bar):
+            time.sleep(10)
             model.train()
             global_step += 1
             inputs = inputs.to(device)
@@ -137,7 +139,7 @@ def main(args):
                                                         noise_std = args.noise_std) 
                         noisy_inputs = noise + sample;
 
-                        outputs, est_sigma = model(noisy_inputs)
+                        outputs, est_sigma, reconstructed_x, original_x = model(noisy_inputs)
 
                         noisy_frame = noisy_inputs[:, (mid*cpf):((mid+1)*cpf), :, :]
                         if args.loss == "loglike":
@@ -189,7 +191,7 @@ def main(args):
 
                     noisy_inputs = noise + sample;
 
-                    outputs, est_sigma = model(noisy_inputs)
+                    outputs, est_sigma, reconstructed_x, original_x = model(noisy_inputs)
 
                     noisy_frame = noisy_inputs[:, (mid*cpf):((mid+1)*cpf), :, :]
                     if args.loss == "loglike":
