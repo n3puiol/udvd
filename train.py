@@ -8,10 +8,10 @@ import torch.nn.functional as F
 
 from torch.utils.tensorboard import SummaryWriter
 
-import time
 # python train.py --model blind-video-net-4 --data-path datasets/DAVIS --dataset DAVIS --batch-size 32 --lr 1e-4 --num-epochs 40
 
 import data, models, utils
+
 
 def main(args):
     device = torch.device('cuda:0') if torch.cuda.is_available() else torch.device('cpu')
@@ -20,7 +20,7 @@ def main(args):
 
     # Build data loaders, a model and an optimizer
     model = models.build_model(args).to(device)
-    cpf = model.c_nolatent # channels per frame
+    cpf = model.c_nolatent  # channels per frame
     mid = args.n_frames // 2
     model = nn.DataParallel(model)
     print(model)
@@ -31,12 +31,14 @@ def main(args):
     if args.resume_training:
         state_dict = utils.load_checkpoint(args, model, optimizer, scheduler)
         global_step = state_dict['last_step']
-        start_epoch = int(state_dict['last_step']/(403200/state_dict['args'].batch_size))+1
+        start_epoch = int(state_dict['last_step'] / (403200 / state_dict['args'].batch_size)) + 1
     else:
         global_step = -1
         start_epoch = 0
 
-    train_loader, valid_loader, _ = data.build_dataset(args.dataset, args.data_path, batch_size=args.batch_size, image_size=args.image_size, stride=args.stride, n_frames=args.n_frames) # , stride=args.stride
+    train_loader, valid_loader, _ = data.build_dataset(args.dataset, args.data_path, batch_size=args.batch_size,
+                                                       image_size=args.image_size, stride=args.stride,
+                                                       n_frames=args.n_frames)  # , stride=args.stride
 
     # Track moving average of loss values
     train_meters = {name: utils.RunningAverageMeter(0.98) for name in (["train_loss", "train_psnr", "train_ssim"])}
@@ -54,7 +56,6 @@ def main(args):
             meter.reset()
 
         for batch_id, inputs in enumerate(train_bar):
-            time.sleep(10)
             model.train()
             global_step += 1
             inputs = inputs.to(device)
@@ -66,13 +67,15 @@ def main(args):
 
             outputs, est_sigma, reconstructed_x, original_x = model(noisy_inputs)
 
-            noisy_frame = noisy_inputs[:, (mid*cpf):((mid+1)*cpf), :, :]
+            noisy_frame = noisy_inputs[:, (mid * cpf):((mid + 1) * cpf), :, :]
 
             # Denoising loss
             if args.blind_noise:
-                denoising_loss = utils.loss_function(outputs, noisy_frame, mode=args.loss, sigma=est_sigma, device=device)
+                denoising_loss = utils.loss_function(outputs, noisy_frame, mode=args.loss, sigma=est_sigma,
+                                                     device=device)
             else:
-                denoising_loss = utils.loss_function(outputs, noisy_frame, mode=args.loss, sigma=args.noise_std/255, device=device)
+                denoising_loss = utils.loss_function(outputs, noisy_frame, mode=args.loss, sigma=args.noise_std / 255,
+                                                     device=device)
 
             # VAE reconstruction loss
             # if debug: print("vae loss")
@@ -88,19 +91,21 @@ def main(args):
             if args.loss == "loglike":
                 with torch.no_grad():
                     if args.blind_noise:
-                        outputs, mean_image = utils.post_process(outputs, noisy_frame, model=args.model, sigma=est_sigma, device=device)
+                        outputs, mean_image = utils.post_process(outputs, noisy_frame, model=args.model,
+                                                                 sigma=est_sigma, device=device)
                     else:
-                        outputs, mean_image = utils.post_process(outputs, noisy_frame, model=args.model, sigma=args.noise_std/255, device=device)
+                        outputs, mean_image = utils.post_process(outputs, noisy_frame, model=args.model,
+                                                                 sigma=args.noise_std / 255, device=device)
 
-            train_psnr = utils.psnr(inputs[:, (mid*cpf):((mid+1)*cpf), :, :], outputs)
-            train_ssim = utils.ssim(inputs[:, (mid*cpf):((mid+1)*cpf), :, :], outputs)
+            train_psnr = utils.psnr(inputs[:, (mid * cpf):((mid + 1) * cpf), :, :], outputs)
+            train_ssim = utils.ssim(inputs[:, (mid * cpf):((mid + 1) * cpf), :, :], outputs)
             train_meters["train_loss"].update(loss.item())
             train_meters["train_psnr"].update(train_psnr.item())
             train_meters["train_ssim"].update(train_ssim.item())
 
             if args.loss == "loglike":
-                mean_psnr = utils.psnr(inputs[:, (mid*cpf):((mid+1)*cpf), :, :], mean_image)
-                mean_ssim = utils.ssim(inputs[:, (mid*cpf):((mid+1)*cpf), :, :], mean_image)
+                mean_psnr = utils.psnr(inputs[:, (mid * cpf):((mid + 1) * cpf), :, :], mean_image)
+                mean_ssim = utils.ssim(inputs[:, (mid * cpf):((mid + 1) * cpf), :, :], mean_image)
                 mean_meters["mean_psnr"].update(mean_psnr.item())
                 mean_meters["mean_ssim"].update(mean_ssim.item())
 
@@ -118,10 +123,11 @@ def main(args):
                 writer.add_histogram("gradients", gradients, global_step)
                 sys.stdout.flush()
 
-            if (batch_id+1) % 250 == 0:
-                logging.info(train_bar.print(dict(**train_meters, **mean_meters, lr=optimizer.param_groups[0]["lr"]))+f" | {batch_id+1} mini-batches ended")
+            if (batch_id + 1) % 250 == 0:
+                logging.info(train_bar.print(dict(**train_meters, **mean_meters, lr=optimizer.param_groups[0][
+                    "lr"])) + f" | {batch_id + 1} mini-batches ended")
 
-            if (batch_id+1) % 2000 == 0:
+            if (batch_id + 1) % 2000 == 0:
                 model.eval()
                 for meter in valid_meters.values():
                     meter.reset()
@@ -135,44 +141,47 @@ def main(args):
                         break
                     with torch.no_grad():
                         sample = sample.to(device)
-                        noise = utils.get_noise(sample, dist = args.noise_dist, mode = 'S',
-                                                        noise_std = args.noise_std) 
+                        noise = utils.get_noise(sample, dist=args.noise_dist, mode='S',
+                                                noise_std=args.noise_std)
                         noisy_inputs = noise + sample;
 
-                        outputs, est_sigma, reconstructed_x, original_x = model(noisy_inputs)
+                        outputs, est_sigma, _, _ = model(noisy_inputs)
 
-                        noisy_frame = noisy_inputs[:, (mid*cpf):((mid+1)*cpf), :, :]
+                        noisy_frame = noisy_inputs[:, (mid * cpf):((mid + 1) * cpf), :, :]
                         if args.loss == "loglike":
                             if args.blind_noise:
-                                outputs, mean_image = utils.post_process(outputs, noisy_frame, model=args.model, sigma=est_sigma, device=device)
+                                outputs, mean_image = utils.post_process(outputs, noisy_frame, model=args.model,
+                                                                         sigma=est_sigma, device=device)
                             else:
-                                outputs, mean_image = utils.post_process(outputs, noisy_frame, model=args.model, sigma=args.noise_std/255, device=device)
+                                outputs, mean_image = utils.post_process(outputs, noisy_frame, model=args.model,
+                                                                         sigma=args.noise_std / 255, device=device)
 
-                        valid_psnr = utils.psnr(sample[:, (mid*cpf):((mid+1)*cpf), :, :], outputs)
-                        valid_ssim = utils.ssim(sample[:, (mid*cpf):((mid+1)*cpf), :, :], outputs)
+                        valid_psnr = utils.psnr(sample[:, (mid * cpf):((mid + 1) * cpf), :, :], outputs)
+                        valid_ssim = utils.ssim(sample[:, (mid * cpf):((mid + 1) * cpf), :, :], outputs)
                         running_valid_psnr += valid_psnr
                         valid_meters["valid_psnr"].update(valid_psnr.item())
                         valid_meters["valid_ssim"].update(valid_ssim.item())
 
                         if args.loss == "loglike":
-                            mean_psnr = utils.psnr(sample[:, (mid*cpf):((mid+1)*cpf), :, :], mean_image)
-                            mean_ssim = utils.ssim(sample[:, (mid*cpf):((mid+1)*cpf), :, :], mean_image)
+                            mean_psnr = utils.psnr(sample[:, (mid * cpf):((mid + 1) * cpf), :, :], mean_image)
+                            mean_ssim = utils.ssim(sample[:, (mid * cpf):((mid + 1) * cpf), :, :], mean_image)
                             mean_meters["mean_psnr"].update(mean_psnr.item())
                             mean_meters["mean_ssim"].update(mean_ssim.item())
 
-                running_valid_psnr /= (sample_id+1)
+                running_valid_psnr /= (sample_id + 1)
 
                 if writer is not None:
                     writer.add_scalar("psnr/valid", valid_meters['valid_psnr'].avg, global_step)
                     writer.add_scalar("ssim/valid", valid_meters['valid_ssim'].avg, global_step)
                     sys.stdout.flush()
 
-                logging.info("EVAL:"+train_bar.print(dict(**valid_meters, **mean_meters, lr=optimizer.param_groups[0]["lr"])))
+                logging.info(
+                    "EVAL:" + train_bar.print(dict(**valid_meters, **mean_meters, lr=optimizer.param_groups[0]["lr"])))
         scheduler.step()
 
         logging.info(train_bar.print(dict(**train_meters, **mean_meters, lr=optimizer.param_groups[0]["lr"])))
 
-        if (epoch+1) % args.valid_interval == 0:
+        if (epoch + 1) % args.valid_interval == 0:
             model.eval()
             for meter in valid_meters.values():
                 meter.reset()
@@ -186,43 +195,47 @@ def main(args):
                     break
                 with torch.no_grad():
                     sample = sample.to(device)
-                    noise = utils.get_noise(sample, dist = args.noise_dist, mode = 'S',
-                                                    noise_std = args.noise_std) 
+                    noise = utils.get_noise(sample, dist=args.noise_dist, mode='S',
+                                            noise_std=args.noise_std)
 
                     noisy_inputs = noise + sample;
 
-                    outputs, est_sigma, reconstructed_x, original_x = model(noisy_inputs)
+                    outputs, est_sigma, _, _ = model(noisy_inputs)
 
-                    noisy_frame = noisy_inputs[:, (mid*cpf):((mid+1)*cpf), :, :]
+                    noisy_frame = noisy_inputs[:, (mid * cpf):((mid + 1) * cpf), :, :]
                     if args.loss == "loglike":
                         if args.blind_noise:
-                            outputs, mean_image = utils.post_process(outputs, noisy_frame, model=args.model, sigma=est_sigma, device=device)
+                            outputs, mean_image = utils.post_process(outputs, noisy_frame, model=args.model,
+                                                                     sigma=est_sigma, device=device)
                         else:
-                            outputs, mean_image = utils.post_process(outputs, noisy_frame, model=args.model, sigma=args.noise_std/255, device=device)
+                            outputs, mean_image = utils.post_process(outputs, noisy_frame, model=args.model,
+                                                                     sigma=args.noise_std / 255, device=device)
 
-                    valid_psnr = utils.psnr(sample[:, (mid*cpf):((mid+1)*cpf), :, :], outputs)
-                    valid_ssim = utils.ssim(sample[:, (mid*cpf):((mid+1)*cpf), :, :], outputs)
+                    valid_psnr = utils.psnr(sample[:, (mid * cpf):((mid + 1) * cpf), :, :], outputs)
+                    valid_ssim = utils.ssim(sample[:, (mid * cpf):((mid + 1) * cpf), :, :], outputs)
                     running_valid_psnr += valid_psnr
                     valid_meters["valid_psnr"].update(valid_psnr.item())
                     valid_meters["valid_ssim"].update(valid_ssim.item())
 
                     if args.loss == "loglike":
-                        mean_psnr = utils.psnr(sample[:, (mid*cpf):((mid+1)*cpf), :, :], mean_image)
-                        mean_ssim = utils.ssim(sample[:, (mid*cpf):((mid+1)*cpf), :, :], mean_image)
+                        mean_psnr = utils.psnr(sample[:, (mid * cpf):((mid + 1) * cpf), :, :], mean_image)
+                        mean_ssim = utils.ssim(sample[:, (mid * cpf):((mid + 1) * cpf), :, :], mean_image)
                         mean_meters["mean_psnr"].update(mean_psnr.item())
                         mean_meters["mean_ssim"].update(mean_ssim.item())
 
-            running_valid_psnr /= (sample_id+1)
+            running_valid_psnr /= (sample_id + 1)
 
             if writer is not None:
                 writer.add_scalar("psnr/valid", valid_meters['valid_psnr'].avg, global_step)
                 writer.add_scalar("ssim/valid", valid_meters['valid_ssim'].avg, global_step)
                 sys.stdout.flush()
 
-            logging.info("EVAL:"+train_bar.print(dict(**valid_meters, **mean_meters, lr=optimizer.param_groups[0]["lr"])))
+            logging.info(
+                "EVAL:" + train_bar.print(dict(**valid_meters, **mean_meters, lr=optimizer.param_groups[0]["lr"])))
             utils.save_checkpoint(args, global_step, model, optimizer, score=valid_meters["valid_psnr"].avg, mode="max")
 
-    logging.info(f"Done training! Best PSNR {utils.save_checkpoint.best_score:.3f} obtained after step {utils.save_checkpoint.best_step}.")
+    logging.info(
+        f"Done training! Best PSNR {utils.save_checkpoint.best_score:.3f} obtained after step {utils.save_checkpoint.best_step}.")
 
 
 def get_args():
@@ -245,12 +258,12 @@ def get_args():
     # Add noise arguments
     parser.add_argument("--noise_dist", default="G", help="G - Gaussian, P - Poisson")
     parser.add_argument("--noise_mode", default="S", help="B - Blind, S - one noise level")
-    parser.add_argument('--noise_std', default = 30, type = float,
-                        help = 'noise level when mode is S')
-    parser.add_argument('--min_noise', default = 0, type = float,
-                        help = 'minimum noise level when mode is B')
-    parser.add_argument('--max_noise', default = 55, type = float,
-                        help = 'maximum noise level when mode is B')
+    parser.add_argument('--noise_std', default=30, type=float,
+                        help='noise level when mode is S')
+    parser.add_argument('--min_noise', default=0, type=float,
+                        help='minimum noise level when mode is B')
+    parser.add_argument('--max_noise', default=55, type=float,
+                        help='maximum noise level when mode is B')
 
     # Add optimization arguments
     parser.add_argument("--lr", default=1e-3, type=float, help="learning rate")
