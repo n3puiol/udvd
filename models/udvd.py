@@ -319,27 +319,30 @@ class BlindVideoNet(nn.Module):
     def prepare_latents(self, x):
         x = x.to("cuda")
 
-        # x is assumed to be of shape [B, 9, H, W] where 9 = 3 frames * 3 channels per frame.
-        # Split x into three frames along the channel dimension.
+        # Split x into three frames
         f1 = x[:, 0:3, :, :]
         f2 = x[:, 3:6, :, :]
         f3 = x[:, 6:9, :, :]
 
-        with torch.no_grad():
-            # Encode each frame separately.
-            f1 = f1.to("cuda")
-            f1_enc = self.vae.encode(f1).latent_dist.sample()
-            torch.cuda.synchronize()  # force sync to catch errors
-            
-            f2 = f2.to("cuda")
-            f2_enc = self.vae.encode(f2).latent_dist.sample()
-            torch.cuda.synchronize()  # force sync to catch errors
+        # Compute padding needed for each frame (same for all)
+        h, w = f1.shape[2], f1.shape[3]
+        pad_h = (8 - h % 8) % 8
+        pad_w = (8 - w % 8) % 8
+        padding = (pad_w // 2, pad_w - pad_w//2, pad_h // 2, pad_h - pad_h//2)
 
-            f3 = f3.to("cuda")
-            f3_enc = self.vae.encode(f3).latent_dist.sample()
-            torch.cuda.synchronize()  # force sync to catch errors
+        # Pad each frame symmetrically
+        f1_padded = F.pad(f1, padding, mode='reflect')
+        f2_padded = F.pad(f2, padding, mode='reflect')
+        f3_padded = F.pad(f3, padding, mode='reflect')
+
+        with torch.no_grad():
+            f1_enc = self.vae.encode(f1_padded).latent_dist.sample()
+            f2_enc = self.vae.encode(f2_padded).latent_dist.sample()
+            f3_enc = self.vae.encode(f3_padded).latent_dist.sample()
         
-        # Concatenate the encoded frames along the channel dimension.
+        # Save padding for decoding
+        self.padding = padding
+
         latents = torch.cat([f1_enc, f2_enc, f3_enc], dim=1)
         return latents
 
@@ -347,23 +350,23 @@ class BlindVideoNet(nn.Module):
     def decode_latents(self, latents):
         latents = latents.to("cuda")
         
-        # Assume latents has shape [B, 3 * latent_channels, H_lat, W_lat]
-        channels_per_frame = self.c
-        
-        # Split the concatenated latent representation into 3 latent frames.
+        # Split the latents
         lf1 = latents[:, self.c*0:self.c*1, :, :]
         lf2 = latents[:, self.c*1:self.c*2, :, :]
         lf3 = latents[:, self.c*2:self.c*3, :, :]
         
-        # Decode each latent frame separately.
         with torch.no_grad():
             f1 = self.vae.decode(lf1).sample
             f2 = self.vae.decode(lf2).sample
             f3 = self.vae.decode(lf3).sample
         
-        # Concatenate the decoded frames along the channel dimension to produce an output with 9 channels.
-        denoised_x = torch.cat([f1, f2, f3], dim=1)
+        # Retrieve padding and crop
+        pad_w_left, pad_w_right, pad_h_top, pad_h_bottom = self.padding
+        f1_cropped = f1[:, :, pad_h_top:f1.size(2)-pad_h_bottom, pad_w_left:f1.size(3)-pad_w_right]
+        f2_cropped = f2[:, :, pad_h_top:f2.size(2)-pad_h_bottom, pad_w_left:f2.size(3)-pad_w_right]
+        f3_cropped = f3[:, :, pad_h_top:f3.size(2)-pad_h_bottom, pad_w_left:f3.size(3)-pad_w_right]
         
+        denoised_x = torch.cat([f1_cropped, f2_cropped, f3_cropped], dim=1)
         return denoised_x
 
 
