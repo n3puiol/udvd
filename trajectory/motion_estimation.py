@@ -70,8 +70,8 @@ class MotionEstimation:
             self.y = y
             self.w = w
             self.h = h
-            px = 20 * np.arange(0, 6) + 8
-            py = 20 * np.arange(0, 6) + 8
+            px = 20 * np.arange(0, 3) + 100
+            py = 20 * np.arange(0, 3) + 100
             self.ps, self.qs = np.meshgrid(px, py)
             self.ps = np.append(self.ps, 64)
             self.qs = np.append(self.qs, 64)
@@ -273,19 +273,75 @@ class MotionEstimation:
         plt.show()
 
 
+def plot_trajectory(ps, trajectory):
+    #   deepflow
+    fig, ax = plt.subplots(figsize=(4, 4), frameon=False)
+    ax.set_title("DeepFlow on noisy video")
+    ax.axis("off")
+    points = []
+    for i in range(len(trajectory)):
+        fps, fpss, fqss, npss, nqss, pss, qss = trajectory[i]
+        prev_x = fpss[0][0]
+        prev_y = fqss[0][0]
+        min_x = min(min(fpss[0]), min(npss[0]))
+        max_x = max(max(fpss[0]), max(npss[0]))
+        min_y = min(min(fqss[0]), min(nqss[0]))
+        max_y = max(max(fqss[0]), max(nqss[0]))
+        points.append((min_x + prev_x, min_y + prev_y))
+        points.append((max_x + prev_x, max_y + prev_y))
+        # for j in range(len(ps)):
+        # # ax.arrow(fpss[j][0], fqss[j][0],
+        # #          2 * (fpss[j][1] - fpss[j][0]),
+        # #          2 * (fqss[j][1] - fqss[j][0]), width=2, head_width=6,
+        # #          length_includes_head=False, facecolor="darkorange", edgecolor='midnightblue')
+
+    points = np.array(points)
+    ax.plot(points[:, 0], points[:, 1], color="darkorange")
+
+    plt.tight_layout()
+    plt.show()
+
+
+def construct_trajectory(trajectory_file=None):
+    if trajectory_file is None:
+        fpss_array, fqss_array, npss_array, nqss_array, pss_array, qss_array = [], [], [], [], [], []
+        for i in range(25, 35, 5):
+            motion_estimation = MotionEstimation()
+            sample = motion_estimation.load_sample(video="01", dataset="KITTI", x=500, y=75, num=i, h=256, w=256)
+            grad_mapss, pss, qss = motion_estimation.compute_jacobian_filters(span=1, load_cache=True,
+                                                                              cache_path="jacobian_filters.pt")
+            ps = motion_estimation.ps[0:9]
+            qs = motion_estimation.qs[0:9]
+            fpss, fqss, npss, nqss = motion_estimation.compute_motion_compensation(sample, ps, qs, span=1)
+            # trajectory.append((ps, fpss, fqss, npss, nqss, pss, qss))
+            fpss_array.append(fpss)
+            fqss_array.append(fqss)
+            npss_array.append(npss)
+            nqss_array.append(nqss)
+            pss_array.append(pss)
+            qss_array.append(qss)
+        trajectory = (fpss_array, fqss_array, npss_array, nqss_array, pss_array, qss_array)
+        np.save("trajectory.npy", trajectory)
+    else:
+        trajectory = np.load(trajectory_file)
+    plot_trajectory(ps, trajectory)
+
+
 def main():
     motion_estimation = MotionEstimation()
+    # sample = motion_estimation.load_sample(video="01", dataset="KITTI", x=500, y=75, num=50, h=256, w=256)
     sample = motion_estimation.load_sample(video="01", dataset="KITTI", x=500, y=75, num=50, h=256, w=256)
     # grad_mapss, pss, qss = motion_estimation.compute_jacobian_filters(span=1, load_cache=True,
     #                                                                   cache_path="jacobian_filters.pt")
-    grad_mapss, pss, qss = motion_estimation.compute_jacobian_filters(span=1, cache_results=True,
-                                                                      cache_path="seq1_jacobian_filters.pt")
-    # grad_mapss, pss, qss = torch.load("seq1_jacobian_filters.pt", weights_only=False)
-    ps = motion_estimation.ps[0:36]
-    qs = motion_estimation.qs[0:36]
+    # grad_mapss, pss, qss = motion_estimation.compute_jacobian_filters(span=1, cache_results=True,
+    #                                                                   cache_path="seq1_jacobian_filters.pt")
+    grad_mapss, pss, qss = torch.load("seq1_jacobian_filters.pt", weights_only=False)
+    ps = motion_estimation.ps[0:9]
+    qs = motion_estimation.qs[0:9]
     fpss, fqss, npss, nqss = motion_estimation.compute_motion_compensation(sample, ps, qs, span=1)
     motion_estimation.plot_motion(ps, fpss, fqss, npss, nqss, pss, qss)
 
 
 if __name__ == "__main__":
-    main()
+    # main()
+    construct_trajectory()
