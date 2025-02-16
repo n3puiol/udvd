@@ -290,8 +290,8 @@ class BlindVideoNet(nn.Module):
         self.blind = blind
         self.sigma_known = sigma_known
         self.rotate = rotate()
-        self.denoiser_1 = Blind_UNet(n_channels=3*channels_per_frame, n_output=4, bias=bias, blind=blind)
-        self.denoiser_2 = Blind_UNet(n_channels=12, n_output=12, bias=bias, blind=blind)
+        self.denoiser_1 = Blind_UNet(n_channels=3*channels_per_frame, n_output=32, bias=bias, blind=blind)
+        self.denoiser_2 = Blind_UNet(n_channels=96, n_output=96, bias=bias, blind=blind)
         if not sigma_known:
             self.sigma_net = Blind_UNet(n_channels=5*channels_per_frame, n_output=1, bias=False, blind=False)
         if blind:
