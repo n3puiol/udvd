@@ -217,29 +217,29 @@ class MotionEstimation:
         head_width = 3 * width
         img = np.array(
             self.transform(self.test_loader.dataset[self.num][0][6:9, self.y:self.y + self.h, self.x:self.x + self.w]))
-        noisy_img = np.array(self.transform(
-            self.test_loader.dataset[self.num][0][6:9, self.y:self.y + self.h, self.x:self.x + self.w] + (
-                    self.noise_std / 255) * self.get_fixed_noise(self.load_sample(), 2)[0][0, :, :, :].cpu()))
+        # noisy_img = np.array(self.transform(
+        #     self.test_loader.dataset[self.num][0][6:9, self.y:self.y + self.h, self.x:self.x + self.w] + (
+        #             self.noise_std / 255) * self.get_fixed_noise(self.load_sample(), 2)[0][0, :, :, :].cpu()))
+        #
+        # fig, ax = plt.subplots(figsize=(4, 4), frameon=False)
 
-        fig, ax = plt.subplots(figsize=(4, 4), frameon=False)
-
-        ax.imshow(noisy_img)
-        ax.set_title("Noisy frame")
-        ax.axis("off")
-
-        plt.tight_layout()
-
-        fig, ax = plt.subplots(figsize=(4, 4), frameon=False)
-
-        ax.imshow(img)
-        ax.set_title("DeepFlow on clean video")
-        ax.axis("off")
-
-        for i in range(len(ps)):
-            ax.arrow(fpss[i][0], fqss[i][0],
-                     scale * (fpss[i][1] - fpss[i][0]),
-                     scale * (fqss[i][1] - fqss[i][0]), width=width, head_width=head_width,
-                     length_includes_head=False, facecolor=color, edgecolor='midnightblue')
+        # ax.imshow(noisy_img)
+        # ax.set_title("Noisy frame")
+        # ax.axis("off")
+        #
+        # plt.tight_layout()
+        #
+        # fig, ax = plt.subplots(figsize=(4, 4), frameon=False)
+        #
+        # ax.imshow(img)
+        # ax.set_title("DeepFlow on clean video")
+        # ax.axis("off")
+        #
+        # for i in range(len(ps)):
+        #     ax.arrow(fpss[i][0], fqss[i][0],
+        #              scale * (fpss[i][1] - fpss[i][0]),
+        #              scale * (fqss[i][1] - fqss[i][0]), width=width, head_width=head_width,
+        #              length_includes_head=False, facecolor=color, edgecolor='midnightblue')
 
         plt.tight_layout()
 
@@ -255,50 +255,66 @@ class MotionEstimation:
                      scale * (qss[i][1] - qss[i][0]), width=width, head_width=head_width,
                      length_includes_head=False, facecolor=color, edgecolor='midnightblue')
 
-        plt.tight_layout()
-
-        fig, ax = plt.subplots(figsize=(4, 4), frameon=False)
-
-        ax.imshow(img)
-        ax.set_title("DeepFlow on noisy video")
-        ax.axis("off")
-
-        for i in range(len(ps)):
-            ax.arrow(npss[i][0], nqss[i][0],
-                     scale * (npss[i][1] - npss[i][0]),
-                     scale * (nqss[i][1] - nqss[i][0]), width=width, head_width=head_width,
-                     length_includes_head=False, facecolor=color, edgecolor='midnightblue')
-
-        plt.tight_layout()
+        # plt.tight_layout()
+        #
+        # fig, ax = plt.subplots(figsize=(4, 4), frameon=False)
+        #
+        # ax.imshow(img)
+        # ax.set_title("DeepFlow on noisy video")
+        # ax.axis("off")
+        #
+        # for i in range(len(ps)):
+        #     ax.arrow(npss[i][0], nqss[i][0],
+        #              scale * (npss[i][1] - npss[i][0]),
+        #              scale * (nqss[i][1] - nqss[i][0]), width=width, head_width=head_width,
+        #              length_includes_head=False, facecolor=color, edgecolor='midnightblue')
+        #
+        # plt.tight_layout()
         plt.show()
 
 
-def plot_trajectory(ps, trajectory):
+def plot_trajectories(trajectories):
     #   deepflow
-    fig, ax = plt.subplots(figsize=(4, 4), frameon=False)
-    ax.set_title("DeepFlow on noisy video")
+    fig, ax = plt.subplots()
+    ax.set_title("Trajectory reconstruction using UDVD implicit motion estimation and non absolute position")
     ax.axis("off")
-    points = []
-    for i in range(len(trajectory)):
-        fps, fpss, fqss, npss, nqss, pss, qss = trajectory[i]
-        prev_x = fpss[0][0]
-        prev_y = fqss[0][0]
-        min_x = min(min(fpss[0]), min(npss[0]))
-        max_x = max(max(fpss[0]), max(npss[0]))
-        min_y = min(min(fqss[0]), min(nqss[0]))
-        max_y = max(max(fqss[0]), max(nqss[0]))
-        points.append((min_x + prev_x, min_y + prev_y))
-        points.append((max_x + prev_x, max_y + prev_y))
-        # for j in range(len(ps)):
-        # # ax.arrow(fpss[j][0], fqss[j][0],
-        # #          2 * (fpss[j][1] - fpss[j][0]),
-        # #          2 * (fqss[j][1] - fqss[j][0]), width=2, head_width=6,
-        # #          length_includes_head=False, facecolor="darkorange", edgecolor='midnightblue')
 
-    points = np.array(points)
-    ax.plot(points[:, 0], points[:, 1], color="darkorange")
+    prev_x = None
+    prev_y = None
+    print(len(trajectories))
+    for trajectory in trajectories:
+        xx, yy = trajectory
+        # for x, y in zip(xx, yy):
+        #     ax.arrow(x[0], y[0],
+        #              2 * (x[1] - x[0]),
+        #              2 * (y[1] - y[0]), length_includes_head=False, edgecolor='midnightblue')
+        x1, x2 = xx[:, 0], xx[:, 1]
+        y1, y2 = yy[:, 0], yy[:, 1]
+        x = np.mean(np.abs(x2 - x1))
+        y = np.mean(np.abs(y2 - y1))
+        # x = np.mean(x2 - x1)
+        # y = np.mean(y2 - y1)
+        print(x, y)
+        if prev_x is None:
+            prev_x = x
+            prev_y = y
+            continue
+        ax.arrow(prev_x, prev_y, x, y, length_includes_head=True, edgecolor='midnightblue', head_width=0.1)
+        prev_x += x
+        prev_y += y
+    # points = np.array(points)
+    # ax.plot(points[:, 0], points[:, 1], color="darkorange")
+        # ax.plot([p[0] for p in points], [p[1] for p in points], color="darkorange")
+    # for x, y in zip(xx, yy):
+    #     points.append((x[0], y[0]))
+    #     points.append((x[1], y[1]))
+    #     prev_x = points[-1][0]
+    #     prev_y = points[-1][1]
+    # points = np.array(points)
+    # print(points)
+    # ax.plot(points[:, 0], points[:, 1], color="darkorange")
 
-    plt.tight_layout()
+    # plt.tight_layout()
     plt.show()
 
 
@@ -307,9 +323,10 @@ def construct_trajectory(trajectory_file=None):
         fpss_array, fqss_array, npss_array, nqss_array, pss_array, qss_array = [], [], [], [], [], []
         for i in range(25, 35, 5):
             motion_estimation = MotionEstimation()
-            sample = motion_estimation.load_sample(video="01", dataset="KITTI", x=500, y=75, num=i, h=256, w=256)
+            # sample = motion_estimation.load_sample(video="01", dataset="KITTI", x=500, y=75, num=i, h=256, w=256)
             grad_mapss, pss, qss = motion_estimation.compute_jacobian_filters(span=1, load_cache=True,
                                                                               cache_path="jacobian_filters.pt")
+            # grad_mapss, pss, qss = motion_estimation.compute_jacobian_filters(span=1)
             ps = motion_estimation.ps[0:9]
             qs = motion_estimation.qs[0:9]
             fpss, fqss, npss, nqss = motion_estimation.compute_motion_compensation(sample, ps, qs, span=1)
@@ -320,28 +337,44 @@ def construct_trajectory(trajectory_file=None):
             nqss_array.append(nqss)
             pss_array.append(pss)
             qss_array.append(qss)
+        np.savez("trajectory.npz", fpss_array=fpss_array, fqss_array=fqss_array, npss_array=npss_array,
+                 nqss_array=nqss_array, pss_array=pss_array, qss_array=qss_array)
         trajectory = (fpss_array, fqss_array, npss_array, nqss_array, pss_array, qss_array)
-        np.save("trajectory.npy", trajectory)
     else:
-        trajectory = np.load(trajectory_file)
-    plot_trajectory(ps, trajectory)
+        np_file = np.load(trajectory_file, allow_pickle=True)
+        fpss_array, fqss_array, npss_array, nqss_array, pss_array, qss_array = np_file["fpss_array"], np_file[
+            "fqss_array"], np_file["npss_array"], np_file["nqss_array"], np_file["pss_array"], np_file["qss_array"]
+        trajectory = (fpss_array, fqss_array, npss_array, nqss_array, pss_array, qss_array)
+    return trajectory
 
 
 def main():
-    motion_estimation = MotionEstimation()
-    # sample = motion_estimation.load_sample(video="01", dataset="KITTI", x=500, y=75, num=50, h=256, w=256)
-    sample = motion_estimation.load_sample(video="01", dataset="KITTI", x=500, y=75, num=50, h=256, w=256)
-    # grad_mapss, pss, qss = motion_estimation.compute_jacobian_filters(span=1, load_cache=True,
-    #                                                                   cache_path="jacobian_filters.pt")
-    # grad_mapss, pss, qss = motion_estimation.compute_jacobian_filters(span=1, cache_results=True,
-    #                                                                   cache_path="seq1_jacobian_filters.pt")
-    grad_mapss, pss, qss = torch.load("seq1_jacobian_filters.pt", weights_only=False)
-    ps = motion_estimation.ps[0:9]
-    qs = motion_estimation.qs[0:9]
-    fpss, fqss, npss, nqss = motion_estimation.compute_motion_compensation(sample, ps, qs, span=1)
-    motion_estimation.plot_motion(ps, fpss, fqss, npss, nqss, pss, qss)
+    trajectories = []
+    for i in range(100, 200, 5):
+        motion_estimation = MotionEstimation()
+        # sample = motion_estimation.load_sample(video="01", dataset="KITTI", x=500, y=75, num=50, h=256, w=256)
+        sample = motion_estimation.load_sample(video="01", dataset="KITTI", x=500, y=75, num=i, h=256, w=256)
+        grad_mapss, pss, qss = motion_estimation.compute_jacobian_filters(span=1)
+        # grad_mapss, pss, qss = motion_estimation.compute_jacobian_filters(span=1, cache_results=True,
+        #                                                                   cache_path="seq1_jacobian_filters.pt")
+        # grad_mapss, pss, qss = torch.load("seq1_jacobian_filters.pt", weights_only=False)
+        ps = motion_estimation.ps[0:9]
+        # qs = motion_estimation.qs[0:9]
+        # fpss, fqss, npss, nqss = motion_estimation.compute_motion_compensation(sample, ps, qs, span=1)
+        motion_estimation.plot_motion(ps, [], [], [], [], pss, qss)
+
+        trajectory = (pss, qss)
+        # plot_trajectory(trajectory)
+        trajectories.append(trajectory)
+    trajectories = np.array(trajectories)
+    np.savez("trajectory1.npz", trajectories=trajectories)
+    return trajectories
 
 
 if __name__ == "__main__":
-    # main()
-    construct_trajectory()
+    trajectories = main()
+    # trajectories = np.load("trajectory.npz", allow_pickle=True)["trajectories"]
+    plot_trajectories(trajectories)
+    # t = construct_trajectory()
+    # t = construct_trajectory("trajectory.npz")
+    # plot_trajectory(t)

@@ -434,7 +434,7 @@ class SingleVideo(torch.utils.data.Dataset):
             self.files = sorted(glob.glob(os.path.join(data_path, "*.png")))
             self.noisy_files = sorted(glob.glob(os.path.join(data_path, "*.npy")))
         elif dataset == "KITTI":
-            self.files = sorted(glob.glob(os.path.join(data_path, "sequences", video, "image_2", "*.png")))[:100]
+            self.files = sorted(glob.glob(os.path.join(data_path, "sequences", video, "image_2", "*.png")))[:201]
 
         self.len = self.bound = len(self.files)
         if self.heldout:

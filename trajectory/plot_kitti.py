@@ -9,7 +9,7 @@ def plot_pose(sequence_nb: int, dataset: KITTIDataset):
         return
     print(f"Sequence {sequence_nb} has {len(poses)} poses")
 
-    for pose in poses:
+    for pose in poses[100:200]:
         plt.plot(pose.x, pose.z, 'ro', markersize=1)
 
     plt.xlabel("x")
@@ -22,7 +22,7 @@ def plot_pose(sequence_nb: int, dataset: KITTIDataset):
 
 def main():
     dataset = KITTIDataset("../datasets/KITTI")
-    plot_pose(0, dataset)
+    plot_pose(1, dataset)
 
 
 if __name__ == "__main__":
